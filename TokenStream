@@ -1,0 +1,87 @@
+import requests
+import pandas as pd
+import matplotlib.pyplot as plt
+from datetime import datetime
+
+class TokenStream:
+    def __init__(self):
+        self.api_url = 'https://api.coingecko.com/api/v3'
+
+    def get_cryptocurrency_list(self) -> pd.DataFrame:
+        """Fetches the list of cryptocurrencies."""
+        url = f"{self.api_url}/coins/markets"
+        params = {
+            'vs_currency': 'usd',
+            'order': 'market_cap_desc',
+            'per_page': 100,
+            'page': 1,
+            'sparkline': False
+        }
+        response = requests.get(url, params=params)
+        cryptocurrencies = response.json()
+        return pd.DataFrame(cryptocurrencies)
+
+    def get_cryptocurrency_data(self, coin_id: str) -> dict:
+        """Fetches current data for a specific cryptocurrency."""
+        url = f"{self.api_url}/coins/{coin_id}"
+        response = requests.get(url)
+        return response.json()
+
+    def get_historical_data(self, coin_id: str, days: int) -> pd.DataFrame:
+        """Fetches historical data for a specific cryptocurrency."""
+        url = f"{self.api_url}/coins/{coin_id}/market_chart"
+        params = {
+            'vs_currency': 'usd',
+            'days': days,
+            'interval': 'hourly'
+        }
+        response = requests.get(url, params=params)
+        data = response.json().get('prices', [])
+        df = pd.DataFrame(data, columns=['timestamp', 'price'])
+        df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+        df.set_index('timestamp', inplace=True)
+        return df
+
+    def analyze_cryptocurrency_metrics(self, coin_id: str) -> dict:
+        """Analyzes key metrics like current price, market cap, and trading volume for a specific cryptocurrency."""
+        data = self.get_cryptocurrency_data(coin_id)
+        market_data = data.get('market_data', {})
+        return {
+            'coin_id': coin_id,
+            'current_price': market_data.get('current_price', {}).get('usd', 0),
+            'market_cap': market_data.get('market_cap', {}).get('usd', 0),
+            'total_volume': market_data.get('total_volume', {}).get('usd', 0)
+        }
+
+    def plot_price_trends(self, coin_id: str, days: int):
+        """Plots historical price trends for a specific cryptocurrency."""
+        df = self.get_historical_data(coin_id, days)
+        if df.empty:
+            print("No historical data found.")
+            return
+
+        plt.figure(figsize=(12, 6))
+        df['price'].plot()
+        plt.title(f'{coin_id.capitalize()} Price Trend')
+        plt.xlabel('Date')
+        plt.ylabel('Price (USD)')
+        plt.grid(True)
+        plt.show()
+
+# Example Usage
+if __name__ == "__main__":
+    token_stream = TokenStream()
+
+    # Fetch and Display Cryptocurrencies
+    cryptocurrencies = token_stream.get_cryptocurrency_list()
+    print("Available Cryptocurrencies:")
+    print(cryptocurrencies[['id', 'name', 'symbol', 'current_price']].head())
+
+    # Fetch and Display Cryptocurrency Data
+    coin_id = 'bitcoin'  # Replace with the coin ID you want to analyze
+    cryptocurrency_data = token_stream.analyze_cryptocurrency_metrics(coin_id)
+    print(f"Data for cryptocurrency {coin_id.capitalize()}:")
+    print(cryptocurrency_data)
+
+    # Plot Historical Price Trends
+    token_stream.plot_price_trends(coin_id=coin_id, days=7)  # Last 7 days
